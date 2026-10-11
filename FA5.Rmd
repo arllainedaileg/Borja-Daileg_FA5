@@ -1,0 +1,398 @@
+---
+title: 'APM1205 - Formative Assessment 5: Linear Models'
+author: "Rachelle Erika Borja & Kristine Arllaine Daileg"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+# ==========================================
+# APM1205 - Formative Assessment 5
+# Linear Models (Palmer Penguins)
+# ==========================================
+```
+
+---
+
+### Part A – Data Preparation
+
+```{r dataset}
+```{r dataset}
+# Load data
+penguins <- read.csv("data/penguins.csv")
+
+# 1. Table for Dataset Structure (Replaces str())
+str_df <- data.frame(
+  Variable = names(penguins),
+  Data_Type = sapply(penguins, class)
+)
+knitr::kable(str_df, row.names = FALSE, caption = "Original Dataset Structure")
+
+# 2. Table for Missing Observations (Replaces raw colSums())
+missing_vals <- colSums(is.na(penguins[, c("body_mass_g", "species", "sex")]))
+missing_df <- data.frame(
+  Variable = names(missing_vals),
+  Missing_Count = as.integer(missing_vals)
+)
+knitr::kable(missing_df, row.names = FALSE, caption = "Missing Observations Check")
+
+# Remove missing observations
+penguins_clean <- subset(
+  penguins,
+  !is.na(body_mass_g) &
+  !is.na(species) &
+  !is.na(sex)
+)
+
+# Convert species and sex to factor variables
+penguins_clean$species <- factor(penguins_clean$species)
+penguins_clean$sex <- factor(penguins_clean$sex)
+
+# Set Adelie and female as the reference categories for regression.
+penguins_clean$species <- relevel(penguins_clean$species, ref = "Adelie")
+penguins_clean$sex <- relevel(penguins_clean$sex, ref = "female")
+
+# 3. Table for Sample Size Comparison (Replaces raw nrow())
+size_df <- data.frame(
+  Dataset = c("Original Dataset", "Cleaned Dataset"),
+  Total_Observations = c(nrow(penguins), nrow(penguins_clean))
+)
+knitr::kable(size_df, row.names = FALSE, caption = "Sample Size Before and After Cleaning")
+```
+
+The original dataset contains 344 observations and 8 variables. There are 2 missing observations for `body_mass_g`, no missing observations for `species`, and 11 missing observations for `sex`. After removing observations with missing values in the variables used for the analysis, the final sample contains **333 penguins**.
+
+---
+
+### PART B - Exploratory Data Analysis
+
+#### A. Descriptive Statistics
+
+The response variable is penguin body mass, measured in grams. The overall descriptive statistics are:
+
+```{r descriptive-overall}
+overall_stats <- data.frame(
+  Statistic = c("Mean", "Standard Deviation", "Minimum", "Maximum"),
+  Value = c(
+    mean(penguins_clean$body_mass_g),
+    sd(penguins_clean$body_mass_g),
+    min(penguins_clean$body_mass_g),
+    max(penguins_clean$body_mass_g)
+  )
+)
+knitr::kable(overall_stats, digits = 2, col.names = c("Statistic", "Value"))
+```
+
+The overall mean body mass is approximately **4207.06 g**, with a standard deviation of **805.22 g**. Body mass ranges from **2700 g to 6300 g**.
+
+**Descriptive statistics by species:**
+
+```{r species-stats}
+species_stats <- aggregate(body_mass_g ~ species, data = penguins_clean,
+                            FUN = function(x) c(Mean = mean(x), SD = sd(x), n = length(x)))
+species_stats <- data.frame(
+  Species = species_stats$species,
+  Mean = species_stats$body_mass_g[, "Mean"],
+  SD = species_stats$body_mass_g[, "SD"],
+  n = species_stats$body_mass_g[, "n"]
+)
+knitr::kable(species_stats, digits = 2,
+             col.names = c("Species", "Mean Body Mass (g)", "SD (g)", "n"))
+```
+
+Gentoo penguins have the highest average body mass (**5092.44 g**), while Adelie penguins have the lowest (**3706.16 g**). Chinstrap penguins have an average body mass of **3733.09 g**, which is close to the Adelie mean.
+
+**Descriptive statistics by sex:**
+
+```{r sex-stats}
+sex_stats <- aggregate(body_mass_g ~ sex, data = penguins_clean,
+                       FUN = function(x) c(Mean = mean(x), SD = sd(x), n = length(x)))
+sex_stats <- data.frame(
+  Sex = sex_stats$sex,
+  Mean = sex_stats$body_mass_g[, "Mean"],
+  SD = sex_stats$body_mass_g[, "SD"],
+  n = sex_stats$body_mass_g[, "n"]
+)
+knitr::kable(sex_stats, digits = 2,
+             col.names = c("Sex", "Mean Body Mass (g)", "SD (g)", "n"))
+```
+
+Male penguins have a higher average body mass (**4545.68 g**) than female penguins (**3862.27 g**).
+
+**Descriptive statistics by species and sex:**
+
+```{r species-sex-stats}
+species_sex_stats <- aggregate(body_mass_g ~ species + sex, data = penguins_clean,
+                               FUN = function(x) c(Mean = mean(x), SD = sd(x), n = length(x)))
+species_sex_stats <- data.frame(
+  Species = species_sex_stats$species,
+  Sex = species_sex_stats$sex,
+  Mean = species_sex_stats$body_mass_g[, "Mean"],
+  SD = species_sex_stats$body_mass_g[, "SD"],
+  n = species_sex_stats$body_mass_g[, "n"]
+)
+knitr::kable(species_sex_stats, digits = 2,
+             col.names = c("Species", "Sex", "Mean Body Mass (g)", "SD (g)", "n"))
+```
+
+The male-female difference is approximately **675 g for Adelie**, **412 g for Chinstrap**, and **805 g for Gentoo**. Thus, the difference between males and females is not the same across species.
+
+#### B. Create a visualization
+
+The following boxplot compares body mass across species while separating the observations by sex.
+
+```{r body-mass-boxplot}
+library(ggplot2)
+
+ggplot(penguins_clean, aes(x = species, y = body_mass_g, fill = sex)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(
+    title = "Penguin Body Mass by Species and Sex",
+    x = "Penguin Species",
+    y = "Body Mass (g)",
+    fill = "Sex"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+A mean plot is also provided to make the species-by-sex pattern easier to compare directly.
+
+```{r mean-plot}
+mean_plot_data <- aggregate(body_mass_g ~ species + sex, data = penguins_clean, FUN = mean)
+
+ggplot(mean_plot_data, aes(x = species, y = body_mass_g, group = sex, color = sex)) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Mean Body Mass by Species and Sex",
+    x = "Penguin Species",
+    y = "Mean Body Mass (g)",
+    color = "Sex"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+#### C. Describe the patterns
+
+The visualizations and descriptive statistics show three main patterns. First, **Gentoo penguins have the highest average body mass** by a substantial margin. Second, **male penguins have higher average body mass than female penguins** within every species. Third, the size of the male-female difference changes across species: the gap is smallest for Chinstrap and largest for Gentoo. This suggests that the relationship between species and body mass may depend on sex, which is investigated formally through the interaction analysis in Parts E and F.
+
+---
+
+### PART C - One-Way ANOVA
+
+#### A. State the hypotheses
+
+The One-Way ANOVA tests whether the mean body mass is the same across the three penguin species.
+
+**Null hypothesis:**
+
+$H_0$: The mean body mass is equal across Adelie, Chinstrap, and Gentoo penguins.
+
+**Alternative hypothesis:**
+
+$H_A$: At least one species has a different mean body mass.
+
+#### B. Fit the model and construct the ANOVA table
+
+```{r oneway-model}
+oneway_model <- aov(body_mass_g ~ species, data = penguins_clean)
+
+knitr::kable(anova(oneway_model), digits = 4, 
+             caption = "One-Way ANOVA: Body Mass by Species")
+```
+
+The One-Way ANOVA gives an **F-statistic of 341.895 with 2 and 330 degrees of freedom**, with **p < 2.2 × 10^-16^**. The species effect is therefore statistically significant.
+
+#### C. Statistical decision and interpretation
+
+Because the p-value is far below the 0.05 significance level, we **reject the null hypothesis**. There is strong statistical evidence that mean penguin body mass differs among the three species. The descriptive statistics show that this difference is mainly associated with the much greater average body mass of Gentoo penguins compared with Adelie and Chinstrap penguins.
+
+---
+
+### PART D - Dummy-Variable Regression
+
+#### A. Fit the regression model
+
+Adelie is used as the reference category, so the model estimates the difference in mean body mass between Chinstrap and Adelie and between Gentoo and Adelie.
+
+```{r dummy-model}
+dummy_model <- lm(body_mass_g ~ species, data = penguins_clean)
+
+knitr::kable(summary(dummy_model)$coefficients, digits = 4, 
+             caption = "Dummy-Variable Regression Coefficients")
+```
+
+#### B. Identify reference category and dummy variables
+
+The **reference category is Adelie**. The two dummy variables are:
+
+- **speciesChinstrap**: equals 1 for Chinstrap penguins and 0 otherwise.
+- **speciesGentoo**: equals 1 for Gentoo penguins and 0 otherwise.
+
+Thus, the intercept represents the mean body mass of Adelie penguins.
+
+#### C. Interpret the coefficients
+
+The estimated coefficients are approximately:
+
+- **Intercept = 3706.16 g:** estimated mean body mass for Adelie penguins.
+- **Chinstrap coefficient = 26.92 g:** Chinstrap penguins have an estimated mean body mass about 26.92 g higher than Adelie penguins. This difference is not statistically significant (p = 0.691).
+- **Gentoo coefficient = 1386.27 g:** Gentoo penguins have an estimated mean body mass about 1386.27 g higher than Adelie penguins. This difference is statistically significant (p < 2.2 × 10^-16^).
+
+#### D. Relationship to One-Way ANOVA
+
+The dummy-variable regression and the One-Way ANOVA address the same overall question about differences in mean body mass across species. The ANOVA tests whether there is any difference among the species means, while the dummy-variable regression expresses those differences relative to the chosen reference category, Adelie. Both analyses provide strong evidence that species is associated with penguin body mass.
+
+---
+
+### PART E - Two-Way ANOVA
+
+#### Fit the full model with interaction
+
+The full model investigates species and sex simultaneously and includes their interaction:
+
+$Y \sim Species + Sex + Species \times Sex$
+
+```{r twoway-model}
+twoway_model <- aov(body_mass_g ~ species * sex, data = penguins_clean)
+
+knitr::kable(anova(twoway_model), digits = 4, 
+             caption = "Two-Way ANOVA: Body Mass by Species and Sex")
+```
+
+#### 1. Species Main Effect
+
+$H_0$: Mean body mass is equal across species.
+
+- **Sum of Squares:** 145,190,219
+- **Degrees of Freedom:** 2
+- **Mean Square:** 72,595,110
+- **F-statistic:** 758.358
+- **p-value:** < 2.2 × 10^-16^
+
+**Interpretation:** We reject the null hypothesis because the p-value is less than 0.05. There is strong evidence that mean body mass differs according to species, after accounting for sex and the interaction between species and sex.
+
+#### 2. Sex Main Effect
+
+$H_0$: Mean body mass is equal between sexes.
+
+- **Sum of Squares:** 37,090,262
+- **Degrees of Freedom:** 1
+- **Mean Square:** 37,090,262
+- **F-statistic:** 387.460
+- **p-value:** < 2.2 × 10^-16^
+
+**Interpretation:** We reject the null hypothesis because the p-value is less than 0.05. There is strong evidence that mean body mass differs between male and female penguins, after accounting for species and the interaction.
+
+#### 3. Species × Sex Interaction
+
+$H_0$: There is no interaction between species and sex.
+
+- **Sum of Squares:** 1,676,557
+- **Degrees of Freedom:** 2
+- **Mean Square:** 838,278
+- **F-statistic:** 8.757
+- **p-value:** 0.000197
+
+**Interpretation:** We reject the null hypothesis because the p-value is less than 0.05. The Species × Sex interaction is statistically significant, indicating that the size of the sex difference in body mass changes depending on the species.
+
+---
+
+### PART F - Interaction Analysis
+
+#### A. Create an Interaction Plot
+
+The interaction plot displays mean body mass for each species separately for males and females.
+
+```{r interaction-plot, warning=FALSE, message=FALSE}
+library(ggplot2)
+
+interaction_data <- aggregate(body_mass_g ~ species + sex, data = penguins_clean, FUN = mean)
+
+ggplot(interaction_data, aes(x = species, y = body_mass_g, group = sex, color = sex)) +
+  geom_point(size = 3) +
+  geom_line(linewidth = 1.2) +
+  labs(
+    title = "Interaction Plot of Body Mass by Species and Sex",
+    x = "Penguin Species",
+    y = "Mean Body Mass (g)",
+    color = "Sex"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+```
+
+#### B. Interpretation
+
+**a. Are the profiles approximately parallel?**
+
+No. The male and female profiles are not perfectly parallel because the vertical distance between the two lines changes across species.
+
+**b. If they are non-parallel, what does this suggest?**
+
+The non-parallel profiles suggest that the effect of sex on body mass varies according to species. Equivalently, the effect of species on body mass depends on sex.
+
+**c. Is the Species × Sex interaction statistically significant?**
+
+Yes. The interaction is statistically significant (**F = 8.757, p = 0.000197**), providing statistical evidence that the sex difference changes across species.
+
+**d. Does the difference between male and female body mass appear to change across species?**
+
+Yes. The male-female difference is approximately **675 g for Adelie**, **412 g for Chinstrap**, and **805 g for Gentoo**.
+
+**e. Explain the interaction in practical terms.**
+
+Males have higher mean body mass than females in all three species, but the size of this difference is not constant. Gentoo has the widest male-female gap, while Chinstrap has the narrowest. Therefore, a single average sex difference would not describe all species equally well.
+
+---
+
+### PART G - Full Regression Model
+
+#### Fit the equivalent regression model
+
+```{r full-model}
+full_model <- lm(body_mass_g ~ species * sex, data = penguins_clean)
+
+knitr::kable(summary(full_model)$coefficients, digits = 4, 
+             caption = "Full Regression Model Coefficients (with Interaction)")
+```
+
+#### Explain the meaning of the coefficients
+
+The reference group is **female Adelie penguins**.
+
+- **Intercept (3368.84):** This is the estimated mean body mass of female Adelie penguins.
+
+- **speciesChinstrap (158.37):** Among females, Chinstrap penguins are estimated to have body mass about 158.37 g higher than female Adelie penguins.
+
+- **speciesGentoo (1310.91):** Among females, Gentoo penguins are estimated to have body mass about 1310.91 g higher than female Adelie penguins.
+
+- **sexmale (674.66):** Among Adelie penguins, males are estimated to be about 674.66 g heavier than females.
+
+- **speciesChinstrap:sexmale (-262.89):** The male-female difference for Chinstrap is estimated to be 262.89 g smaller than the corresponding difference for Adelie. This is statistically significant (p = 0.00406).
+
+- **speciesGentoo:sexmale (130.44):** The male-female difference for Gentoo is estimated to be 130.44 g larger than the corresponding difference for Adelie. This coefficient is not statistically significant at the 0.05 level (p = 0.08886).
+
+The interaction coefficients show why the main effects should be retained: the species and sex effects provide the baseline comparisons, while the interaction terms adjust those comparisons for the way the effects change across species and sex.
+
+---
+
+### Final Interpretation
+
+**Does penguin body mass differ according to species and sex, and does the effect of species on body mass depend on sex?**
+
+Yes. The analysis provides strong evidence that penguin body mass differs according to species and sex, and that the effect of species on body mass depends on sex.
+
+- **Statistical evidence:** The One-Way ANOVA shows a statistically significant difference in body mass among species. The Two-Way ANOVA shows significant main effects for species and sex, and the Species × Sex interaction is also statistically significant (**p = 0.000197**).
+
+- **Observed patterns:** Gentoo penguins have the highest average body mass, and males are heavier than females in all three species. However, the male-female difference varies across species: approximately 675 g for Adelie, 412 g for Chinstrap, and 805 g for Gentoo.
+
+- **Practical interpretation:** Species and sex should both be considered when describing penguin body mass. Because the size of the sex difference changes across species, the effect of species cannot be described accurately using one common sex difference for all species. The significant interaction supports including the Species × Sex term in the full model.
