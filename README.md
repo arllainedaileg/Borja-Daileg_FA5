@@ -61,3 +61,13 @@ Thus, males are heavier than females across all three species, but the size of t
 The full regression model explains approximately **85.46%** of the variation in body mass (R² = 0.8546).
 
 #### Instructions for Reproducing the Analysis
+
+1. Software requirements: Make sure R and RStudio are installed on your machine. A LaTeX distribution is required to create the PDF report.
+2. File Setup: Download the penguins.csv dataset. If you're using the R Markdown file, put it in the main project directory; if you're using the R script, put it in a subfolder called Dataset/.
+3. Open the R console and run the following command to install the required packages for visualization, table formatting, and PDF rendering: 
+install.packages(c("ggplot2", "knitr", "tinytex"))
+(Note: If this is your first time knitting to PDF, run tinytex::install_tinytex() in the console).
+Set Working Directory: Open RStudio and navigate to Session > Set Working Directory > To Source File Location so R can successfully locate and load the dataset.
+Execute the Analysis:
+- Using the R Script: Open the script in RStudio, highlight the entire code, and click Run (or press Ctrl+Enter / Cmd+Enter). The statistical summaries will print to the console, and the graphical figures will automatically export and save as PNG files directly to your working directory.
+- Using the R Markdown File: Open the .Rmd file in RStudio and click the Knit button at the top of the source editor. This will automatically execute the code and render the full compiled HTML or PDF report containing all formatted tables, statistical outputs, and inline plots.
