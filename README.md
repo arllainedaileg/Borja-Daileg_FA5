@@ -47,7 +47,7 @@ The following statistical methods were used:
 
 #### Brief Summary of Findings
 
-The analysis provides strong evidence that penguin body mass differs by **species** and **sex**. The Two-Way ANOVA found statistically significant main effects for species and sex, as well as a statistically significant **Species × Sex interaction** (p = 0.000197).
+The analysis provides strong evidence that penguin body mass differs by species and sex. The Two-Way ANOVA found statistically significant main effects for species and sex, as well as a statistically significant Species × Sex interaction (p = 0.000197).
 
 The observed male–female body-mass differences vary across species:
 
